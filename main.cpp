@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include "raylib.h"
 #include "raymath.h"
 #include <stdlib.h>
 #include <assert.h>
@@ -10,26 +11,6 @@ static const float TOLERANCE = 1e-3;
 Vector2 v2(float x, float y) {
     return Vector2{x, y};
 }
-
-typedef struct {
-    Vector2 ballPosition;
-    Vector2 ballSpeed;
-    int ballRadius;
-    bool pause;
-    int framesCounter;
-} Scene1Data;
-
-void* scene1_init(void) {
-    Scene1Data *data = new Scene1Data;
-    data->ballPosition.x = GetScreenWidth()/2.0f;
-    data->ballPosition.y = GetScreenHeight()/2.0f;
-    data->ballSpeed.x = 5.0;
-    data->ballSpeed.y = 4.0;
-    data->ballRadius = 20;
-    data->pause = 0;
-    data->framesCounter = 0;
-    return data;
-};
 
 enum class OpticMaterialKind {
   Reflective,
@@ -68,6 +49,7 @@ struct SDFCircle : public SDF {
   Vector2 center;
   float radius;
 
+  SDFCircle() : center(v2(0, 0)), radius(0) {}
   SDFCircle(Vector2 center, float radius) : center(center), radius(radius) {};
 
   float valueAt(Vector2 point) {
@@ -125,7 +107,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
       // change of medium.
-      DrawCircle(pointNext.x, pointNext.y, 3, {253, 255, 226, 128});
+      DrawCircle(pointNext.x, pointNext.y, 3, {100, 100, 100, 128});
 
       Vector2 normalOut = Vector2Normalize(s.glassSDF->dirOutwardAt(pointNext));
       // normal inward.
@@ -178,23 +160,42 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
 }
 
 
-#define REFRACTIVE_INDEX_GLASS 2 
-#define REFRACTIVE_INDEX_AIR 1
+typedef struct {
+  SDFCircle *circleLeft, *circleRight;
+  SDFIntersect *lens;
+  float lensRadius;
+  float lensThickness;
+  Vector2 lensCenter;
+} Scene1Data;
+
+void* scene1_init(void) {
+    Scene1Data *data = new Scene1Data;
+    data->lensRadius = 1000;
+    data->lensThickness = 10;
+    data->lensCenter = v2(0, 0);
+    data->circleLeft = new SDFCircle();
+    data->circleRight = new SDFCircle();
+    data->lens = new SDFIntersect(data->circleLeft, data->circleRight);
+    return data;
+};
+
 
 void scene1_draw(Scene1Data *data) {
     
     int midX = GetScreenWidth() / 2;
     int midY = GetScreenHeight() / 2;
 
+    // update SDF
+    data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
+    data->circleLeft->radius = data->lensRadius;
+    data->circleRight->radius = data->lensRadius;
+    data->circleLeft->center.y = data->circleRight->center.y = midY;
+    data->circleLeft->center.x = midX - data->lensRadius + data->lensThickness;
+    data->circleRight->center.x = midX + data->lensRadius - data->lensThickness;
+
     BeginDrawing();
     ClearBackground({240, 240, 240, 255});
-
-    const Vector2 lensCenter = v2(midX, midY);
-    Scene s;
-    const int lensRadius = 3000;
-    const int lensThickness = 10;
-    s.glassSDF = new SDFIntersect(new SDFCircle(Vector2Add(lensCenter, v2(-lensRadius + lensThickness, 0)), lensRadius), 
-        new SDFCircle(Vector2Add(lensCenter, v2(lensRadius - lensThickness, 0)), lensRadius));
+    Scene s; s.glassSDF = data->lens;
 
     const Vector2 mousePos = GetMousePosition();
     for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/60) {
