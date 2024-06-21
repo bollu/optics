@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.4.3)
 project(optics C CXX)
 
+
 cmake_minimum_required(VERSION 3.11) # FetchContent is available in 3.11+
 project(optics)
 
@@ -28,9 +29,11 @@ endif()
 
 # Our Project
 
-add_executable(${PROJECT_NAME} main.c)
+add_executable(${PROJECT_NAME} main.cpp)
 #set(raylib_VERBOSE 1)
 target_link_libraries(${PROJECT_NAME} raylib)
+set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+
 
 # Web Configurations
 if (${PLATFORM} STREQUAL "Web")
