@@ -175,13 +175,17 @@ void sceneD_draw(void *raw_data) {
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
-    const int NRAYS = 360;
+    const int NRAYS = 1000;
     const Vector2 mousePos = GetMousePosition();
-    for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
-      std::pair<Vector2, bool> out;
-      Vector2 raydir = v2(cos(theta), sin(theta));
-      raytrace(s, data->apertureData, 
-          mousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+    for(float dy = -NRAYS/2; dy <= NRAYS/2; dy+= 10) {
+      Vector2 rayLoc = v2(mousePos.x, mousePos.y + dy);
+      const int NDIRS = 10;
+      for (int i = 0; i <= NDIRS; ++i) {
+        const float theta = (M_PI * 2.0) * ((float)i / (float)NDIRS);
+        Vector2 rayDir = v2(cos(theta), sin(theta));
+        raytrace(s, data->apertureData, 
+            rayLoc, rayDir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+      }
     }
 
     drawAperture(s, data->apertureData);
