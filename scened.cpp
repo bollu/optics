@@ -53,25 +53,45 @@ void drawAperture(Scene s, ApertureData apertureData) {
 
 static bool DrawCircleAtNextPoint = false;
 
-static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
-  const float MIN_TRACE_DIST = 1;
+
+void drawPointSequence(const std::vector<Vector2> &points, int thickness, Color color) {
+  for(int i = 0; i < points.size() - 1; ++i) {
+    Vector2 cur = points[i];
+    Vector2 next = points[i+1];
+    DrawLineEx(cur, next, thickness, color);
+  }
+}
+
+struct RaytraceResult {
+  bool totalInternalReflected = false;
+  bool refracted = false;
+  bool intersectedAperture = false;
+  std::vector<Vector2> points;
+
+};
+
+static RaytraceResult raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+  const float MIN_TRACE_DIST = 0.1;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
+  RaytraceResult result;
   OpticMaterial matCur = materialQuery(s, start);
 
   const int NSTEPS = 300;
   static int maxSteps = 1;
   for(int isteps = 1; isteps <= NSTEPS; isteps++) {
+    result.points.push_back(pointCur);
     if (!inbounds(bottomLeft, pointCur, topRight)) { 
       maxSteps = std::max<int>(maxSteps, isteps);
       printf("stopped in max %5d steps\n", maxSteps);
-      return;
+      return result;
     }
 
 
     const float distToAperture = apertureData.valueAt(pointCur);
     if (distToAperture < 0) {
-      return; 
+      result.intersectedAperture = true;
+      return result; 
     }
     // use distance to glass to decide length of ray.
     const float distToGlass = s.glassSDF->valueAt(pointCur);
@@ -80,7 +100,7 @@ static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2
     OpticMaterial matNext = materialQuery(s, pointNext);
 
     // draw a circle showing how we shot the ray.
-    if (DrawCircleAtNextPoint) { DrawCircle(pointNext.x, pointNext.y, 10, {100, 100, 100, 50}); }
+    // if (DrawCircleAtNextPoint) { DrawCircle(pointNext.x, pointNext.y, 10, {100, 100, 100, 50}); }
 
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
@@ -104,8 +124,7 @@ static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2
       if (true || cosIn > 0) {
         if (matNext.kind == OpticMaterialKind::Opaque) {
           //opaque, stop.
-          DrawCircle(pointNext.x, pointNext.y, 3, BLACK);
-          return;
+          return result;
         }
         else if (matNext.kind == OpticMaterialKind::Reflective) {
           // reflective.
@@ -114,10 +133,12 @@ static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2
         } else if (matNext.kind == OpticMaterialKind::Refractive) {
           if (fabs(sinOut) >= 1) {
             // total internal reflection.
+            result.totalInternalReflected = true;
             dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
             // DrawCircle(pointNext.x, pointNext.y, 2, (Color) {177, 175, 255, 255}); // total internal reflection color
           } else {
             // refraction..
+            result.refracted = true;
             const float cosOut = sqrt(1 - sinOut * sinOut);
             Vector2 newDir = Vector2Add(Vector2Scale(dirProjNormalIn, cosOut), Vector2Scale(dirRejNormalIn, sinOut));
             dir = Vector2Normalize(newDir);
@@ -127,18 +148,15 @@ static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2
         }
       } // end (cosIn > 0)
     }
-    Color c = { 120, 160, 131, 255}; // light ray color
-    c.a = 255 * (1.0f - powf(((float)(isteps) / NSTEPS), 0.8));
-    DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
     matCur = matNext;
   }
-  return;
+  return result;
 }
 
 void* sceneD_init(void) {
     sceneDData *data = new sceneDData;
-    data->lensRadius = 1000;
+    data->lensRadius = 10000;
     data->lensThickness = 100;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
@@ -168,23 +186,35 @@ void sceneD_draw(void *raw_data) {
     data->circleLeft->center.x = midX - data->lensRadius + data->lensThickness;
     data->circleRight->center.x = midX + data->lensRadius - data->lensThickness;
     data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
-    data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS;
-    data->apertureData.halfWidth = 4;
+    data->apertureData.halfWidth = 10;
+    data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS - data->apertureData.halfWidth * 2;
 
     BeginDrawing();
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
-    const int NRAYS = 1000;
+    const int NPOINTS = 10;
+    const int TOTAL_Y = 300;
     const Vector2 mousePos = GetMousePosition();
-    for(float dy = -NRAYS/2; dy <= NRAYS/2; dy+= 10) {
-      Vector2 rayLoc = v2(mousePos.x, mousePos.y + dy);
-      const int NDIRS = 10;
-      for (int i = 0; i <= NDIRS; ++i) {
-        const float theta = (M_PI * 2.0) * ((float)i / (float)NDIRS);
+    for(int i = 0; i < NPOINTS; ++i) {
+      float y = mousePos.y + (float(i - NPOINTS/2) / (NPOINTS/2)) * TOTAL_Y;
+      Vector2 rayLoc = v2(mousePos.x, y);
+      const int NDIRS = 1000;
+      for (int j = 0; j <= NDIRS; ++j) {
+        const float theta = (M_PI * 2.0) * ((float)j / (float)NDIRS);
         Vector2 rayDir = v2(cos(theta), sin(theta));
-        raytrace(s, data->apertureData, 
+        RaytraceResult result = raytrace(s, data->apertureData, 
             rayLoc, rayDir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+        if (result.refracted && !result.totalInternalReflected && !result.intersectedAperture) {
+          const unsigned char r = (1.0 - float(i) / float(NPOINTS)) * 120;
+          const unsigned char g = float(i) / float(NPOINTS) * 160;
+          const unsigned char b = 255;
+          Color c = { r, g, b, 20}; 
+          drawPointSequence(result.points, 3, c);
+        } else if (result.intersectedAperture) {
+          Color c = { 200, 200, 200, 5};
+          drawPointSequence(result.points, 4, c);
+        }
       }
     }
 
