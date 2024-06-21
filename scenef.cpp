@@ -130,6 +130,7 @@ typedef struct {
   Vector2 lensCenter;
   ApertureData apertureData;
   ScreenData screenData;
+  float opacityFraction; // this is the equivalent of exposure.
 } sceneFData;
 
 
@@ -301,13 +302,14 @@ using namespace SceneF;
 void* sceneF_init(void) {
     sceneFData *data = new sceneFData;
     data->lensRadius = 10000;
-    data->lensThickness = 10;
+    data->lensThickness = 100;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
     data->lens = new SDFIntersect(data->circleLeft, data->circleRight);
     data->apertureData.halfOpeningHeight = 0;
     data->apertureData.x = 0;
+    data->opacityFraction = 0.05;
     return data;
 };
 
@@ -331,25 +333,29 @@ void sceneF_draw(void *raw_data) {
     int midX = GetScreenWidth() / 2;
     int midY = GetScreenHeight() / 2;
 
+    const int LENS_X = GetScreenWidth() * 17.0 / 20.0;
+    const int APERTURE_X = LENS_X - 3 * data->lensThickness;
+    const int SCREEN_X = GetScreenWidth() * 19.0 / 20.0;
+
     // update SDF
     // data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
     data->circleLeft->radius = data->lensRadius;
     data->circleRight->radius = data->lensRadius;
     data->circleLeft->center.y = data->circleRight->center.y = midY;
-    data->circleLeft->center.x = midX * 1.2 - data->lensRadius + data->lensThickness;
-    data->circleRight->center.x = midX * 1.2 + data->lensRadius - data->lensThickness;
+    data->circleLeft->center.x = LENS_X - data->lensRadius + data->lensThickness;
+    data->circleRight->center.x = LENS_X + data->lensRadius - data->lensThickness;
     if (IsKeyDown(KEY_LEFT_SHIFT)) {
-      data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
+      data->opacityFraction = std::max<float>(0, std::min<float>(1, data->opacityFraction + 0.01 * GetMouseWheelMove()));
     } else {
       data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
     }
-    data->apertureData.halfWidth = 10;
-    data->apertureData.x = data->circleLeft->center.x + data->circleLeft->radius + 30 * data->lensThickness;
+    data->apertureData.halfWidth = 4;
+    data->apertureData.x = APERTURE_X;
 
-    data->screenData.x = data->apertureData.x + 20 * data->lensThickness;
+    data->screenData.x = SCREEN_X;
     data->screenData.y = GetScreenHeight() / 2;
-    data->screenData.halfWidth = 20;
-    data->screenData.halfHeight = GetScreenHeight() / 4;
+    data->screenData.halfWidth = 10;
+    data->screenData.halfHeight = GetScreenHeight();
 
     BeginDrawing();
     ClearBackground({240, 240, 240, 255});
@@ -360,10 +366,10 @@ void sceneF_draw(void *raw_data) {
     Scene s; s.glassSDF = data->lens;
 
     const int NPOINTS = 20;
-    const int TOTAL_Y = 200;
+    const float TOTAL_Y_HALF = 0.5 * (GetScreenHeight() * 15.0 / 20.0);
     const Vector2 mousePos = GetMousePosition();
     for(int i = 0; i < NPOINTS; ++i) {
-      float y = mousePos.y + (float(i - NPOINTS/2) / (NPOINTS/2)) * TOTAL_Y;
+      float y = mousePos.y + (float(i - NPOINTS/2) / (NPOINTS/2)) * TOTAL_Y_HALF;
       Vector2 rayLoc = v2(mousePos.x, y);
 
       const unsigned char r = (float(i) / float(NPOINTS)) * 255;
@@ -371,7 +377,7 @@ void sceneF_draw(void *raw_data) {
       const unsigned char b = (1.0 - float(i) / float(NPOINTS)) * 255;;
       Color rayColor = {r, g, b, 255}; 
 
-      const int NDIRS = 360;
+      const int NDIRS = 720;
       for (int j = 0; j <= NDIRS; ++j) {
         const float theta = (M_PI * 2.0) * ((float)j / (float)NDIRS);
         Vector2 rayDir = v2(cos(theta), sin(theta));
@@ -382,13 +388,14 @@ void sceneF_draw(void *raw_data) {
           const float y = result.points[result.points.size() - 1].y;
           const float x = data->screenData.x;
           Color dotColor = rayColor;
-          dotColor.a = 1;
-          DrawCircle(x, y, 10, dotColor); 
+          // dotColor.a = 10.0;
+          dotColor.a = 100.0 * data->opacityFraction + (1 - data->opacityFraction) * 1.0;
+          DrawCircle(x, y, 3, dotColor); 
         }
         if (result.intersectedScreen) {
           // if ((i + j) % 10 > 0) { continue; }
           Color lineColor = rayColor;
-          lineColor.a = 5;
+          lineColor.a = 100.0 * data->opacityFraction + (1 - data->opacityFraction) * 1.0;
           drawLineSegmentSequence(result.points, 5, lineColor);
         } 
       }

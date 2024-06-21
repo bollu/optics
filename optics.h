@@ -132,7 +132,7 @@ struct Scene {
   SDF *glassSDF;
 };
 
-static const float REFRACTIVE_INDEX_GLASS = 10;
+static const float REFRACTIVE_INDEX_GLASS = 2;
 
 static OpticMaterial materialQuery(Scene s, Vector2 point) {
   float dist = s.glassSDF->valueAt(point);
