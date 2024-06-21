@@ -79,7 +79,7 @@ struct SDFCircle : public SDF {
   }
 };
 
-struct SDFIntersect {
+struct SDFIntersect : public SDF {
   SDF *s1, *s2;
 
   SDFIntersect(SDF *s1, SDF *s2) : s1(s1), s2(s2) {}; 
@@ -106,7 +106,7 @@ OpticMaterial materialQuery(Scene s, Vector2 point) {
   } else {
     // glass
     // return OpticMaterial(OpticMaterialKind::Reflective, 1.0);
-    return OpticMaterial(OpticMaterialKind::Refractive, 2);
+    return OpticMaterial(OpticMaterialKind::Refractive, 2.5);
   }
 }
 
@@ -154,7 +154,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
           if (fabs(sinOut) >= 1) {
             // total internal reflection.
             dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
-            DrawCircle(pointNext.x, pointNext.y, 5, (Color) {255, 0, 0, 128});
+            DrawCircle(pointNext.x, pointNext.y, 5, (Color) {244, 143, 177, 255});
           } else {
             // refraction..
             const float cosOut = sqrt(1 - sinOut * sinOut);
@@ -166,7 +166,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
         }
       } // end (cosIn > 0)
     }
-    Color c = SKYBLUE;
+    Color c = { 144, 244, 210, 255};
     c.a = 255 * (1.0f - ((float)(i + 1) / NSTEPS));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
@@ -188,11 +188,11 @@ void scene1_draw(Scene1Data *data) {
     ClearBackground(RAYWHITE);
 
     const Vector2 lensCenter = v2(midX, midY);
-    const int lensHalfThickness = 5;
-    const int lensRadiusL = 100;
-    const int lensRadiusR = 10; 
     Scene s;
-    s.glassSDF = new SDFCircle(lensCenter, lensRadiusL);
+    const int lensRadius = 3000;
+    const int lensThickness = 10;
+    s.glassSDF = new SDFIntersect(new SDFCircle(Vector2Add(lensCenter, v2(-lensRadius + lensThickness, 0)), lensRadius), 
+        new SDFCircle(Vector2Add(lensCenter, v2(lensRadius - lensThickness, 0)), lensRadius));
 
     const Vector2 mousePos = GetMousePosition();
     for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/60) {
