@@ -88,7 +88,7 @@ typedef struct {
   Vector2 lensCenter;
   ApertureData apertureData;
   ScreenData screenData;
-} sceneDData;
+} sceneFData;
 
 
 static void drawAperture(Scene s, ApertureData apertureData) {
@@ -219,8 +219,8 @@ static RaytraceResult raytrace(Scene s,
   return result;
 }
 
-void* sceneD_init(void) {
-    sceneDData *data = new sceneDData;
+void* sceneF_init(void) {
+    sceneFData *data = new sceneFData;
     data->lensRadius = 10000;
     data->lensThickness = 100;
     data->lensCenter = v2(0, 0);
@@ -232,8 +232,8 @@ void* sceneD_init(void) {
     return data;
 };
 
-void sceneD_draw(void *raw_data) {
-    sceneDData *data = (sceneDData*)raw_data;
+void sceneF_draw(void *raw_data) {
+    sceneFData *data = (sceneFData*)raw_data;
     
 
     if (IsKeyPressed(KEY_SPACE)) {
