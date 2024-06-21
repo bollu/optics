@@ -3,12 +3,14 @@
 void *sceneA_init();
 void *sceneB_init();
 void *sceneC_init();
+void *sceneD_init();
 
 void sceneA_draw(void*);
 void sceneB_draw(void*);
 void sceneC_draw(void*);
+void sceneD_draw(void*);
 
-#define NSCENES 3
+#define NSCENES 4
 int main() {
    	const int display = GetCurrentMonitor();
     const int screenWidth = GetMonitorWidth(display);
@@ -17,14 +19,10 @@ int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "Optics");
 
-    void *scene_data[NSCENES];
-    scene_data[0] = sceneA_init();
-    scene_data[1] = sceneB_init();
-    scene_data[2] = sceneC_init();
-    std::vector<std::function<void(void*)>> scene_fns = { sceneA_draw, sceneB_draw, sceneC_draw };
-    std::vector<int> ix2Scene = { 0, 1, 2 };
-    int ix = 0;
-
+    void *scene_data[NSCENES] = {sceneA_init(), sceneB_init(), sceneC_init(), sceneD_init() };
+    std::function<void(void*)> scene_fns[NSCENES] = { sceneA_draw, sceneB_draw, sceneC_draw, sceneD_draw };
+    int ix2Scene[NSCENES] = { 0, 1, 2, 3 };
+    int ix = NSCENES - 1;
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {

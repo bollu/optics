@@ -29,7 +29,7 @@ endif()
 
 # Our Project
 
-add_executable(${PROJECT_NAME} main.cpp scenea.cpp sceneb.cpp scenec.cpp)
+add_executable(${PROJECT_NAME} main.cpp scenea.cpp sceneb.cpp scenec.cpp scened.cpp)
 #set(raylib_VERBOSE 1)
 target_link_libraries(${PROJECT_NAME} raylib)
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
