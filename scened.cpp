@@ -250,7 +250,11 @@ void sceneD_draw(void *raw_data) {
     data->circleLeft->center.y = data->circleRight->center.y = midY;
     data->circleLeft->center.x = midX - data->lensRadius + data->lensThickness;
     data->circleRight->center.x = midX + data->lensRadius - data->lensThickness;
-    data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
+    if (IsKeyDown(KEY_LEFT_SHIFT)) {
+      data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
+    } else {
+      data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
+    }
     data->apertureData.halfWidth = 10;
     data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS - data->apertureData.halfWidth * 2;
 
