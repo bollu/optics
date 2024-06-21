@@ -4,6 +4,14 @@
 > for signed distance functions to simulate ray optics.
 
 
+#### Defocusing when object is not on focal plane
+
+
+
+https://github.com/bollu/optics/assets/1694861/bc70df51-4724-4f25-8c6b-1f9950616c68
+
+
+
 #### Aperture size versus sharpness for depth of field
 
 
