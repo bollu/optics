@@ -102,19 +102,30 @@ bool inbounds(Vector2 bottomLeft, Vector2 cur, Vector2 topRight) {
   return true;
 }
 
-void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+struct RaytraceResults {
+  int nreflections = 0;
+  int nrefractions = 0;
+  int nsteps = 0;
+
+  float getImportance() {
+    return  nsteps;
+
+  }
+};
+
+RaytraceResults raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+  RaytraceResults results;
   const float MIN_TRACE_DIST = 1;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
   OpticMaterial matCur = materialQuery(s, start);
 
-  const int NSTEPS = 30;
+  const int NSTEPS = 100;
   static int maxSteps = 1;
   for(int isteps = 1; isteps <= NSTEPS; isteps++) {
+    results.nsteps++;
     if (!inbounds(bottomLeft, pointCur, topRight)) { 
-      maxSteps = std::max<int>(maxSteps, isteps);
-      printf("stopped in max %5d steps\n", maxSteps);
-      return;
+      return results;
     }
 
     // use distance to glass to decide length of ray.
@@ -149,13 +160,15 @@ void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 t
         if (matNext.kind == OpticMaterialKind::Opaque) {
           //opaque, stop.
           DrawCircle(pointNext.x, pointNext.y, 3, BLACK);
-          return;
+          return results;
         }
         else if (matNext.kind == OpticMaterialKind::Reflective) {
+          results.nreflections++;
           // reflective.
           dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
 
         } else if (matNext.kind == OpticMaterialKind::Refractive) {
+          results.nrefractions++;
           if (fabs(sinOut) >= 1) {
             // total internal reflection.
             dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
@@ -171,13 +184,13 @@ void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 t
         }
       } // end (cosIn > 0)
     }
-    Color c = { 120, 160, 131, 255}; // light ray color
-    c.a = 255 * (1.0f - ((float)(isteps) / NSTEPS));
+    Color c = { 255, 255, 255, 1}; // light ray color
+    // c.a = 10 * (1.0f - ((float)(isteps) / NSTEPS));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
     matCur = matNext;
   }
-  return;
+  return results;
 }
 
 
@@ -187,21 +200,27 @@ typedef struct {
   float lensRadius;
   float lensThickness;
   Vector2 lensCenter;
-} Scene1Data;
+  Vector2 mousePos;
+  std::vector<float> thetas;
+} scene2Data;
 
-void* scene1_init(void) {
-    Scene1Data *data = new Scene1Data;
+void* scene2_init(void) {
+    scene2Data *data = new scene2Data;
     data->lensRadius = 1000;
     data->lensThickness = 10;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
+    data->mousePos = v2(0, 0);
     data->lens = new SDFIntersect(data->circleLeft, data->circleRight);
     return data;
 };
 
+float randFloat01() {
+  return ((float)rand()/(float)(RAND_MAX));
+}
 
-void scene1_draw(Scene1Data *data) {
+void scene2_draw(scene2Data *data) {
     
     int midX = GetScreenWidth() / 2;
     int midY = GetScreenHeight() / 2;
@@ -215,15 +234,37 @@ void scene1_draw(Scene1Data *data) {
     data->circleRight->center.x = midX + data->lensRadius - data->lensThickness;
 
     BeginDrawing();
-    ClearBackground({240, 240, 240, 255});
+    ClearBackground({0, 0, 0, 255});
     Scene s; s.glassSDF = data->lens;
 
-    const int NRAYS = 180;
-    const Vector2 mousePos = GetMousePosition();
-    for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
-      std::pair<Vector2, bool> out;
+    // const int NRAYS = 180;
+    const Vector2 curMousePos = GetMousePosition();
+    if (curMousePos.x != data->mousePos.x || curMousePos.y != data->mousePos.y) {
+      data->thetas.clear();
+    }
+    data->mousePos = curMousePos;
+    static float curImportance = 1e-3;
+    static float curTheta = 0;
+
+
+    const int NSAMPLES_PER_FRAME = 20;
+    for(int i = 0; i < NSAMPLES_PER_FRAME; ++i) {
+      const float nextTheta = curTheta + (randFloat01() > 0.5 ? 1 : -1 ) * randFloat01() * M_PI / 10;
+      data->thetas.push_back(nextTheta);
+      Vector2 raydir = v2(cos(nextTheta), sin(nextTheta));
+      RaytraceResults result = raytrace(s, curMousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+      const float nextImportance = result.getImportance();
+      // metropolois hastings
+      if (randFloat01() < nextImportance / curImportance) {
+        curTheta = nextTheta;
+        curImportance = nextImportance;
+      } 
+    }
+
+    for(int i = 0; i < data->thetas.size() - 1; ++i) {
+      float theta = data->thetas[i];
       Vector2 raydir = v2(cos(theta), sin(theta));
-      raytrace(s, mousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+      raytrace(s, curMousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
     }
 
     DrawFPS(10, 10);
@@ -232,14 +273,15 @@ void scene1_draw(Scene1Data *data) {
 
 #define NSCENES 1
 int main() {
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+   	const int display = GetCurrentMonitor();
+    const int screenWidth = GetMonitorWidth(display);
+    const int screenHeight = GetMonitorHeight(display);
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "Optics");
 
     void *data[NSCENES];
-    data[0] = scene1_init();
+    data[0] = scene2_init();
     int cur_scene = 0;
 
     SetTargetFPS(60);
@@ -249,7 +291,7 @@ int main() {
             cur_scene = (cur_scene + 1) % NSCENES;
         }
         if (cur_scene == 0) {
-            scene1_draw((Scene1Data*)data[cur_scene]);
+            scene2_draw((scene2Data*)data[cur_scene]);
 
         } else {
             assert(false && "cur_scene must be < NSCENES");
