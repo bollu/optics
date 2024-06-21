@@ -1,19 +1,23 @@
-#include "raylib.h"
 #include "optics.h"
 
 void *scene1_init();
-void  scene1_draw(void *scene1_data);
+void *scene2_init();
 
-#define NSCENES 1
+void scene1_draw(void*);
+void scene2_draw(void*);
+
+#define NSCENES 2
 int main() {
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+   	const int display = GetCurrentMonitor();
+    const int screenWidth = GetMonitorWidth(display);
+    const int screenHeight = GetMonitorHeight(display);
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "Optics");
 
     void *data[NSCENES];
     data[0] = scene1_init();
+    data[1] = scene2_init();
     int cur_scene = 0;
 
     SetTargetFPS(60);
@@ -22,9 +26,12 @@ int main() {
         if (IsKeyPressed(KEY_TAB)) {
             cur_scene = (cur_scene + 1) % NSCENES;
         }
-        if (cur_scene == 0) {
-            scene1_draw(data[cur_scene]);
 
+        if (cur_scene == 0) {
+            scene1_draw(data[0]);
+        }
+        else if (cur_scene == 1) {
+            scene2_draw(data[1]);
         } else {
             assert(false && "cur_scene must be < NSCENES");
         }
