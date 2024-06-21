@@ -132,14 +132,15 @@ struct Scene {
   SDF *glassSDF;
 };
 
+static const float REFRACTIVE_INDEX_GLASS = 10;
+
 static OpticMaterial materialQuery(Scene s, Vector2 point) {
   float dist = s.glassSDF->valueAt(point);
   if (dist > 0) {
     return OpticMaterial(OpticMaterialKind::Refractive, 1.0);
   } else {
     // glass
-    // return OpticMaterial(OpticMaterialKind::Reflective, 1.0);
-    return OpticMaterial(OpticMaterialKind::Refractive, 2.5);
+    return OpticMaterial(OpticMaterialKind::Refractive, REFRACTIVE_INDEX_GLASS);
   }
 }
 
