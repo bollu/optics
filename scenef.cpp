@@ -256,9 +256,9 @@ void sceneF_draw(void *raw_data) {
       data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
     }
     data->apertureData.halfWidth = 10;
-    data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS - data->apertureData.halfWidth * 2;
+    data->apertureData.x = midX + 3 * data->lensThickness;
 
-    data->screenData.x = midX + 5 * data->lensThickness;
+    data->screenData.x = data->apertureData.x + 3 * data->lensThickness;
     data->screenData.halfWidth = 20;
     data->screenData.halfHeight = GetScreenHeight() / 4;
 
@@ -278,7 +278,7 @@ void sceneF_draw(void *raw_data) {
       const unsigned char b = (1.0 - float(i) / float(NPOINTS)) * 255;;
       Color rayColor = {r, g, b, 20}; 
 
-      const int NDIRS = 1000;
+      const int NDIRS = 600;
       for (int j = 0; j <= NDIRS; ++j) {
         const float theta = (M_PI * 2.0) * ((float)j / (float)NDIRS);
         Vector2 rayDir = v2(cos(theta), sin(theta));
@@ -293,12 +293,9 @@ void sceneF_draw(void *raw_data) {
           DrawCircle(x, y, 3, dotColor); 
           // DrawLineEx(cur, next, data->screenData.halfWidth / 4, color);
         }
-        if (result.refracted && !result.totalInternalReflected && !result.intersectedAperture) {
+        if (result.intersectedScreen) {
           drawLineSegmentSequence(result.points, 3, rayColor);
-        } else if (result.intersectedAperture) {
-          Color c = { 200, 200, 200, 5};
-          drawLineSegmentSequence(result.points, 4, c);
-        }
+        } 
       }
     }
 
