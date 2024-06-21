@@ -1,28 +1,25 @@
+// scene that bounces rays a constant number of times with constant distance.
 #include "optics.h"
 
 static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
-  const float MIN_TRACE_DIST = 1;
+  const float MIN_TRACE_DIST = 100;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
   OpticMaterial matCur = materialQuery(s, start);
 
-  const int NSTEPS = 30;
-  static int maxSteps = 1;
+  const int NSTEPS = 1000;
   for(int isteps = 1; isteps <= NSTEPS; isteps++) {
     if (!inbounds(bottomLeft, pointCur, topRight)) { 
-      maxSteps = std::max<int>(maxSteps, isteps);
-      printf("stopped in max %5d steps\n", maxSteps);
       return;
     }
 
+
     // use distance to glass to decide length of ray.
     const float distToGlass = s.glassSDF->valueAt(pointCur);
-    const float rayLength = std::max<float>(fabs(distToGlass) * 0.75, MIN_TRACE_DIST);
-    Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, rayLength));
+    Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, std::max<float>(0.9 * fabs(distToGlass), MIN_TRACE_DIST)));
     OpticMaterial matNext = materialQuery(s, pointNext);
 
     // draw a circle showing how we shot the ray.
-    // DrawCircle(pointNext.x, pointNext.y, 3, {100, 100, 100, 50});
 
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
@@ -90,7 +87,7 @@ typedef struct {
 void* sceneA_init(void) {
     sceneAData *data = new sceneAData;
     data->lensRadius = 1000;
-    data->lensThickness = 10;
+    data->lensThickness = 0;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
@@ -117,7 +114,7 @@ void sceneA_draw(void *raw_data) {
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
-    const int NRAYS = 180;
+    const int NRAYS = 360;
     const Vector2 mousePos = GetMousePosition();
     for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
       std::pair<Vector2, bool> out;

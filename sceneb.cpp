@@ -1,4 +1,8 @@
+// scene that uses the SDF to decide how to bounce light.
 #include "optics.h"
+
+
+static bool DrawCircleAtNextPoint = false;
 
 static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
   const float MIN_TRACE_DIST = 1;
@@ -22,7 +26,7 @@ static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Ve
     OpticMaterial matNext = materialQuery(s, pointNext);
 
     // draw a circle showing how we shot the ray.
-    // DrawCircle(pointNext.x, pointNext.y, 3, {100, 100, 100, 50});
+    if (DrawCircleAtNextPoint) { DrawCircle(pointNext.x, pointNext.y, 10, {100, 100, 100, 50}); }
 
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
@@ -90,7 +94,7 @@ typedef struct {
 void* sceneB_init(void) {
     sceneBData *data = new sceneBData;
     data->lensRadius = 1000;
-    data->lensThickness = 10;
+    data->lensThickness = 100;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
@@ -102,6 +106,11 @@ void* sceneB_init(void) {
 void sceneB_draw(void *raw_data) {
     sceneBData *data = (sceneBData*)raw_data;
     
+
+    if (IsKeyPressed(KEY_SPACE)) {
+      DrawCircleAtNextPoint = !DrawCircleAtNextPoint;
+    }
+
     int midX = GetScreenWidth() / 2;
     int midY = GetScreenHeight() / 2;
 
@@ -117,7 +126,7 @@ void sceneB_draw(void *raw_data) {
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
-    const int NRAYS = 180;
+    const int NRAYS = 360;
     const Vector2 mousePos = GetMousePosition();
     for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
       std::pair<Vector2, bool> out;

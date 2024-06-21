@@ -1,4 +1,4 @@
-// scene where rays are marched by constant distance forward, 40 steps.
+// scene where light rays are importance sampled, slowly.
 #include "optics.h"
 
 struct RaytraceResults {
@@ -106,7 +106,7 @@ typedef struct {
 void* sceneC_init(void) {
     sceneCData *data = new sceneCData;
     data->lensRadius = 1000;
-    data->lensThickness = 10;
+    data->lensThickness = 100;
     data->lensCenter = v2(0, 0);
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
@@ -143,7 +143,7 @@ void sceneC_draw(void *raw_data) {
     static float curTheta = 0;
 
 
-    const int NSAMPLES_PER_FRAME = 20;
+    const int NSAMPLES_PER_FRAME = 50;
     for(int i = 0; i < NSAMPLES_PER_FRAME; ++i) {
       const float nextTheta = curTheta + (randFloat01() > 0.5 ? 1 : -1 ) * randFloat01() * M_PI / 10;
       data->thetas.push_back(nextTheta);

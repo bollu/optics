@@ -29,7 +29,13 @@ int main() {
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_TAB)) {
-            ix = (ix + 1) % NSCENES;
+            if (IsKeyDown(KEY_LEFT_SHIFT)) {
+              ix = (ix - 1);
+              if (ix < 0) { ix = NSCENES - 1; };
+            } else {
+              ix = (ix + 1);
+              if (ix == NSCENES) { ix = 0; }
+            }
         }
 
         int scene = ix2Scene[ix];
