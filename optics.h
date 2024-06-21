@@ -78,6 +78,50 @@ struct SDFIntersect : public SDF {
   }
 };
 
+struct SDFUnion : public SDF {
+  SDF *s1, *s2;
+
+  SDFUnion(SDF *s1, SDF *s2) : s1(s1), s2(s2) {}; 
+  float valueAt(Vector2 point) {
+    return std::min<float>(s1->valueAt(point), s2->valueAt(point));
+  }
+  Vector2 dirOutwardAt (Vector2 point) {
+    if (s1->valueAt(point) < s2->valueAt(point)) {
+      return s1->dirOutwardAt(point);
+    } else {
+      return s2->dirOutwardAt(point);
+    }
+  }
+};
+
+struct SDFAABB : public SDF {
+  Vector2 topLeft = v2(0, 0);
+  Vector2 bottomRight = v2(0, 0);
+  SDFAABB() : topLeft(v2(0, 0)), bottomRight(v2(0, 0)) {}
+  SDFAABB(Vector2 topLeft, Vector2 bottomRight) : topLeft(topLeft), bottomRight(bottomRight) {}
+
+
+  Vector2 dirOutwardAt (Vector2 point) { return run(point).second; }
+
+  float valueAt(Vector2 point) { return run(point).first; }
+
+  std::pair<float, Vector2> run(Vector2 point) {
+    assert(topLeft.x <= bottomRight.x);
+    assert(topLeft.y <= bottomRight.y);
+    // tl + (br - tl) * 0.5 = tl * 0.5 + br * 0.5 = (tl + br) * 0.5;
+    Vector2 mid = Vector2Scale(Vector2Add(topLeft, bottomRight), 0.5);
+    int width = bottomRight.x - topLeft.x;
+    int height = bottomRight.y - topLeft.y;
+
+    Vector2 delta = Vector2Subtract(point, mid);
+    if (fabs(delta.x) < fabs(delta.y)) {
+      return {fabs(delta.x) - width, v2(delta.x, 0)};
+    } else {
+      return {fabs(delta.y) - height, v2(0, delta.y)}; 
+    }
+  }
+};
+
 struct Scene {
   SDF *glassSDF;
 };
