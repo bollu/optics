@@ -171,7 +171,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 t
         }
       } // end (cosIn > 0)
     }
-    Color c = { 90, 114, 160, 255}; // light ray color
+    Color c = { 120, 160, 131, 255}; // light ray color
     c.a = 255 * (1.0f - ((float)(isteps) / NSTEPS));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
