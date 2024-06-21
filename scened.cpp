@@ -2,15 +2,64 @@
 #include "optics.h"
 
 
+#define DISTANCE_APERTURE_TO_LENS 20
+
+struct ApertureData : public SDF {
+  int x;
+  float halfOpeningHeight;
+  float halfWidth;
+
+  float valueAt(Vector2 point) {
+    // distance from aperture.
+    if (point.x < x - halfWidth) {
+      return -(point.x - x - halfWidth);
+    } else if (point.x > x + halfWidth) {
+      return point.x - x - halfWidth;
+    } else {
+      // we are inside the box, get distance from the thickness.
+      return halfOpeningHeight - fabs(point.y - GetScreenHeight() / 2);
+    }
+  }
+
+  // return a potentially unnormalized vector in the normal outward direction.
+  // This is the direction of the gradient.
+  Vector2 dirOutwardAt(Vector2 point) {
+    return point.x < x ? v2(-1, 0) : v2(1, 0);
+  }
+};
+
+
+typedef struct {
+  SDFCircle *circleLeft, *circleRight;
+  SDFIntersect *lens;
+  float lensRadius;
+  float lensThickness;
+  Vector2 lensCenter;
+  ApertureData apertureData;
+} sceneDData;
+
+
+void drawAperture(Scene s, ApertureData apertureData) {
+  Color color {0, 0, 0, 255};
+    DrawLineEx(v2(apertureData.x, 0), 
+        v2(apertureData.x, GetScreenHeight() / 2 - apertureData.halfOpeningHeight), 
+        apertureData.halfWidth, color);
+
+    DrawLineEx(v2(apertureData.x, GetScreenHeight() / 2 + apertureData.halfOpeningHeight),
+        v2(apertureData.x, GetScreenHeight()),
+        apertureData.halfWidth, color);
+
+};
+
 static bool DrawCircleAtNextPoint = false;
 
-static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+static void raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
   const float MIN_TRACE_DIST = 1;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
   OpticMaterial matCur = materialQuery(s, start);
 
-  const int NSTEPS = 30;
+  const int NSTEPS = 300;
   static int maxSteps = 1;
   for(int isteps = 1; isteps <= NSTEPS; isteps++) {
     if (!inbounds(bottomLeft, pointCur, topRight)) { 
@@ -19,9 +68,14 @@ static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Ve
       return;
     }
 
+
+    const float distToAperture = apertureData.valueAt(pointCur);
+    if (distToAperture < 0) {
+      return; 
+    }
     // use distance to glass to decide length of ray.
     const float distToGlass = s.glassSDF->valueAt(pointCur);
-    const float rayLength = std::max<float>(fabs(distToGlass) * 0.75, MIN_TRACE_DIST);
+    const float rayLength = std::max<float>(std::min<float>(fabs(distToAperture), fabs(distToGlass)) * 0.75, MIN_TRACE_DIST);
     Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, rayLength));
     OpticMaterial matNext = materialQuery(s, pointNext);
 
@@ -74,22 +128,13 @@ static void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Ve
       } // end (cosIn > 0)
     }
     Color c = { 120, 160, 131, 255}; // light ray color
-    c.a = 255 * (1.0f - ((float)(isteps) / NSTEPS));
+    c.a = 255 * (1.0f - powf(((float)(isteps) / NSTEPS), 0.8));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
     matCur = matNext;
   }
   return;
 }
-
-
-typedef struct {
-  SDFCircle *circleLeft, *circleRight;
-  SDFIntersect *lens;
-  float lensRadius;
-  float lensThickness;
-  Vector2 lensCenter;
-} sceneDData;
 
 void* sceneD_init(void) {
     sceneDData *data = new sceneDData;
@@ -99,9 +144,10 @@ void* sceneD_init(void) {
     data->circleLeft = new SDFCircle();
     data->circleRight = new SDFCircle();
     data->lens = new SDFIntersect(data->circleLeft, data->circleRight);
+    data->apertureData.halfOpeningHeight = 0;
+    data->apertureData.x = 0;
     return data;
 };
-
 
 void sceneD_draw(void *raw_data) {
     sceneDData *data = (sceneDData*)raw_data;
@@ -115,12 +161,15 @@ void sceneD_draw(void *raw_data) {
     int midY = GetScreenHeight() / 2;
 
     // update SDF
-    data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
+    // data->lensThickness = std::max<int>(0, data->lensThickness + GetMouseWheelMove());
     data->circleLeft->radius = data->lensRadius;
     data->circleRight->radius = data->lensRadius;
     data->circleLeft->center.y = data->circleRight->center.y = midY;
     data->circleLeft->center.x = midX - data->lensRadius + data->lensThickness;
     data->circleRight->center.x = midX + data->lensRadius - data->lensThickness;
+    data->apertureData.halfOpeningHeight = std::max<int>(0, data->apertureData.halfOpeningHeight + 5 * GetMouseWheelMove());
+    data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS;
+    data->apertureData.halfWidth = 4;
 
     BeginDrawing();
     ClearBackground({240, 240, 240, 255});
@@ -131,8 +180,11 @@ void sceneD_draw(void *raw_data) {
     for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
       std::pair<Vector2, bool> out;
       Vector2 raydir = v2(cos(theta), sin(theta));
-      raytrace(s, mousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+      raytrace(s, data->apertureData, 
+          mousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
     }
+
+    drawAperture(s, data->apertureData);
 
     DrawFPS(10, 10);
     EndDrawing();
