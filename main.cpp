@@ -92,22 +92,43 @@ OpticMaterial materialQuery(Scene s, Vector2 point) {
   }
 }
 
-void raytrace(Scene s, Vector2 start, Vector2 dir) {
-  const int NSTEPS = 3000;
-  const float TRACE_DIST = 0.2;
+// cordinate system: top left (0, 0), positive x is right, positive y is bottom?
+bool inbounds(Vector2 bottomLeft, Vector2 cur, Vector2 topRight) {
+  if (cur.x < bottomLeft.x) { return false; }
+  if (cur.y < bottomLeft.y) { return false; }
+
+  if (cur.x > topRight.x) { return false; }
+  if (cur.y > topRight.y) { return false; }
+  return true;
+}
+
+void raytrace(Scene s, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+  const float MIN_TRACE_DIST = 1;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
   OpticMaterial matCur = materialQuery(s, start);
 
-  for(int i = 0; i < NSTEPS; ++i) {
-    Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, TRACE_DIST));
+  const int NSTEPS = 30;
+  static int maxSteps = 1;
+  for(int isteps = 1; isteps <= NSTEPS; isteps++) {
+    if (!inbounds(bottomLeft, pointCur, topRight)) { 
+      maxSteps = std::max<int>(maxSteps, isteps);
+      printf("stopped in max %5d steps\n", maxSteps);
+      return;
+    }
+
+    // use distance to glass to decide length of ray.
+    const float distToGlass = s.glassSDF->valueAt(pointCur);
+    const float rayLength = std::max<float>(fabs(distToGlass) * 0.75, MIN_TRACE_DIST);
+    Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, rayLength));
     OpticMaterial matNext = materialQuery(s, pointNext);
 
+    // draw a circle showing how we shot the ray.
+    // DrawCircle(pointNext.x, pointNext.y, 3, {100, 100, 100, 50});
 
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
       // change of medium.
-      DrawCircle(pointNext.x, pointNext.y, 3, {100, 100, 100, 128});
 
       Vector2 normalOut = Vector2Normalize(s.glassSDF->dirOutwardAt(pointNext));
       // normal inward.
@@ -138,7 +159,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
           if (fabs(sinOut) >= 1) {
             // total internal reflection.
             dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
-            DrawCircle(pointNext.x, pointNext.y, 5, (Color) {226, 187, 223, 255}); // total internal reflection color
+            // DrawCircle(pointNext.x, pointNext.y, 2, (Color) {177, 175, 255, 255}); // total internal reflection color
           } else {
             // refraction..
             const float cosOut = sqrt(1 - sinOut * sinOut);
@@ -151,7 +172,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
       } // end (cosIn > 0)
     }
     Color c = { 90, 114, 160, 255}; // light ray color
-    c.a = 255 * (1.0f - ((float)(i + 1) / NSTEPS));
+    c.a = 255 * (1.0f - ((float)(isteps) / NSTEPS));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
     matCur = matNext;
@@ -197,11 +218,12 @@ void scene1_draw(Scene1Data *data) {
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
+    const int NRAYS = 180;
     const Vector2 mousePos = GetMousePosition();
-    for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/60) {
+    for(float theta = 0; theta < M_PI * 2; theta += (M_PI * 2)/NRAYS) {
       std::pair<Vector2, bool> out;
       Vector2 raydir = v2(cos(theta), sin(theta));
-      raytrace(s, mousePos, raydir);
+      raytrace(s, mousePos, raydir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
     }
 
     DrawFPS(10, 10);
