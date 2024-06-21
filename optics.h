@@ -35,6 +35,12 @@ struct OpticMaterial {
   };
 };
 
+struct SDFResult {
+  Vector2 dirOutward;
+  float dist;
+
+};
+
 // signed distance function that also produces normal vectors.
 struct SDF {
   virtual ~SDF() {};

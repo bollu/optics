@@ -4,10 +4,61 @@
 
 #define DISTANCE_APERTURE_TO_LENS 20
 
-struct ApertureData : public SDF {
+
+static SDFResult sdfAABB(Vector2 topLeft, Vector2 bottomRight, Vector2 point) {
+    assert(topLeft.x <= bottomRight.x);
+    assert(topLeft.y <= bottomRight.y);
+    // tl + (br - tl) * 0.5 = tl * 0.5 + br * 0.5 = (tl + br) * 0.5;
+    Vector2 mid = Vector2Scale(Vector2Add(topLeft, bottomRight), 0.5);
+    const int width = bottomRight.x - topLeft.x;
+    const int height = bottomRight.y - topLeft.y;
+
+    Vector2 delta = Vector2Subtract(point, mid);
+    SDFResult result;
+    //                  ||||     [=======]
+    // intersection of: |||| and [=======]
+    //                  ||||     [=======]
+    if (fabs(delta.x) > fabs(delta.y)) {
+      result.dist = fabs(delta.x) - width * 0.5;
+      result.dirOutward = v2(delta.x, 0);
+    } else {
+      result.dist = fabs(delta.y) - height * 0.5;
+      result.dirOutward = v2(0, delta.y);
+    }
+    return result;
+}
+
+struct ScreenData : public SDF {
   int x;
-  float halfOpeningHeight;
-  float halfWidth;
+  int halfWidth;
+  int halfHeight;
+
+  float valueAt(Vector2 point) {
+    const Vector2 topLeft = v2(x - halfWidth, GetScreenHeight() / 2 - halfHeight);
+    const Vector2 bottomRight = v2(x + halfWidth, GetScreenHeight() / 2 + halfHeight);
+    return sdfAABB(topLeft, bottomRight, point).dist;
+  }
+
+  Vector2 dirOutwardAt(Vector2 point) {
+    const Vector2 topLeft = v2(x - halfWidth, GetScreenHeight() / 2 - halfHeight);
+    const Vector2 bottomRight = v2(x + halfWidth, GetScreenHeight() / 2 + halfHeight);
+    return sdfAABB(topLeft, bottomRight, point).dirOutward;
+  }
+
+};
+
+
+void drawScreen(Scene s, ScreenData screenData) {
+  Color color {128, 128, 128, 50};
+    DrawLineEx(v2(screenData.x, GetScreenHeight() / 2 - screenData.halfHeight),
+        v2(screenData.x, GetScreenHeight() / 2 + screenData.halfHeight),
+        screenData.halfWidth * 2, color);
+}
+
+struct ApertureData : public SDF {
+  int x = 0;
+  float halfOpeningHeight = 0;
+  float halfWidth = 0;
 
   float valueAt(Vector2 point) {
     // distance from aperture.
@@ -36,11 +87,12 @@ typedef struct {
   float lensThickness;
   Vector2 lensCenter;
   ApertureData apertureData;
+  ScreenData screenData;
 } sceneDData;
 
 
 void drawAperture(Scene s, ApertureData apertureData) {
-  Color color {0, 0, 0, 255};
+  Color color {160, 147, 125, 255};
     DrawLineEx(v2(apertureData.x, 0), 
         v2(apertureData.x, GetScreenHeight() / 2 - apertureData.halfOpeningHeight), 
         apertureData.halfWidth, color);
@@ -54,7 +106,7 @@ void drawAperture(Scene s, ApertureData apertureData) {
 static bool DrawCircleAtNextPoint = false;
 
 
-void drawPointSequence(const std::vector<Vector2> &points, int thickness, Color color) {
+void drawLineSegmentSequence(const std::vector<Vector2> &points, int thickness, Color color) {
   for(int i = 0; i < points.size() - 1; ++i) {
     Vector2 cur = points[i];
     Vector2 next = points[i+1];
@@ -66,28 +118,36 @@ struct RaytraceResult {
   bool totalInternalReflected = false;
   bool refracted = false;
   bool intersectedAperture = false;
-  std::vector<Vector2> points;
-
+  Color rayColor;
+  bool intersectedScreen = false;
+  std::vector<Vector2> points = {};
 };
 
-static RaytraceResult raytrace(Scene s, ApertureData &apertureData, Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
-  const float MIN_TRACE_DIST = 0.1;
+static RaytraceResult raytrace(Scene s, 
+    Color rayColor,
+    ApertureData &apertureData, 
+    ScreenData &screenData,
+    Vector2 start, Vector2 dir, Vector2 bottomLeft, Vector2 topRight) {
+  const float MIN_TRACE_DIST = 0.01;
   dir = Vector2Normalize(dir);
   Vector2 pointCur = start;
   RaytraceResult result;
+  result.rayColor = rayColor;
   OpticMaterial matCur = materialQuery(s, start);
 
-  const int NSTEPS = 300;
-  static int maxSteps = 1;
+  const int NSTEPS = 100;
   for(int isteps = 1; isteps <= NSTEPS; isteps++) {
     result.points.push_back(pointCur);
     if (!inbounds(bottomLeft, pointCur, topRight)) { 
-      maxSteps = std::max<int>(maxSteps, isteps);
-      printf("stopped in max %5d steps\n", maxSteps);
       return result;
     }
 
 
+    const float distToScreen = screenData.valueAt(pointCur);
+    if (distToScreen < 0) {
+      result.intersectedScreen = true;
+      return result;
+    }
     const float distToAperture = apertureData.valueAt(pointCur);
     if (distToAperture < 0) {
       result.intersectedAperture = true;
@@ -95,7 +155,12 @@ static RaytraceResult raytrace(Scene s, ApertureData &apertureData, Vector2 star
     }
     // use distance to glass to decide length of ray.
     const float distToGlass = s.glassSDF->valueAt(pointCur);
-    const float rayLength = std::max<float>(std::min<float>(fabs(distToAperture), fabs(distToGlass)) * 0.75, MIN_TRACE_DIST);
+    float dist = 10000;
+    dist = std::min<float>(dist, fabs(distToAperture));
+    dist = std::min<float>(dist, fabs(distToGlass));
+    dist = std::min<float>(dist, fabs(distToScreen));
+
+    const float rayLength = std::max<float>(dist * 0.9, MIN_TRACE_DIST);
     Vector2 pointNext = Vector2Add(pointCur, Vector2Scale(dir, rayLength));
     OpticMaterial matNext = materialQuery(s, pointNext);
 
@@ -189,36 +254,52 @@ void sceneD_draw(void *raw_data) {
     data->apertureData.halfWidth = 10;
     data->apertureData.x = data->circleRight->center.x - data->circleRight->radius - DISTANCE_APERTURE_TO_LENS - data->apertureData.halfWidth * 2;
 
+    data->screenData.x = midX + 5 * data->lensThickness;
+    data->screenData.halfWidth = 20;
+    data->screenData.halfHeight = GetScreenHeight() / 4;
+
     BeginDrawing();
     ClearBackground({240, 240, 240, 255});
     Scene s; s.glassSDF = data->lens;
 
     const int NPOINTS = 10;
-    const int TOTAL_Y = 300;
+    const int TOTAL_Y = 150;
     const Vector2 mousePos = GetMousePosition();
     for(int i = 0; i < NPOINTS; ++i) {
       float y = mousePos.y + (float(i - NPOINTS/2) / (NPOINTS/2)) * TOTAL_Y;
       Vector2 rayLoc = v2(mousePos.x, y);
+
+      const unsigned char r = (float(i) / float(NPOINTS)) * 255;
+      const unsigned char g = fabs(2 * (0.5 - float(i))) / float(NPOINTS) * 255;
+      const unsigned char b = (1.0 - float(i) / float(NPOINTS)) * 255;;
+      Color rayColor = {r, g, b, 20}; 
+
       const int NDIRS = 1000;
       for (int j = 0; j <= NDIRS; ++j) {
         const float theta = (M_PI * 2.0) * ((float)j / (float)NDIRS);
         Vector2 rayDir = v2(cos(theta), sin(theta));
-        RaytraceResult result = raytrace(s, data->apertureData, 
+        RaytraceResult result = raytrace(s, rayColor, 
+            data->apertureData,  data->screenData,
             rayLoc, rayDir, v2(0, 0), v2(GetScreenWidth(), GetScreenHeight()));
+        if (result.intersectedScreen && result.points.size() > 0) {
+          const float y = result.points[result.points.size() - 1].y;
+          const float x = data->screenData.x;
+          Color dotColor = rayColor;
+          dotColor.a = 100;
+          DrawCircle(x, y, 3, dotColor); 
+          // DrawLineEx(cur, next, data->screenData.halfWidth / 4, color);
+        }
         if (result.refracted && !result.totalInternalReflected && !result.intersectedAperture) {
-          const unsigned char r = (1.0 - float(i) / float(NPOINTS)) * 120;
-          const unsigned char g = float(i) / float(NPOINTS) * 160;
-          const unsigned char b = 255;
-          Color c = { r, g, b, 20}; 
-          drawPointSequence(result.points, 3, c);
+          drawLineSegmentSequence(result.points, 3, rayColor);
         } else if (result.intersectedAperture) {
           Color c = { 200, 200, 200, 5};
-          drawPointSequence(result.points, 4, c);
+          drawLineSegmentSequence(result.points, 4, c);
         }
       }
     }
 
     drawAperture(s, data->apertureData);
+    drawScreen(s, data->screenData);
 
     DrawFPS(10, 10);
     EndDrawing();
