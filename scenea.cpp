@@ -85,10 +85,10 @@ typedef struct {
   float lensRadius;
   float lensThickness;
   Vector2 lensCenter;
-} Scene1Data;
+} sceneAData;
 
-void* scene1_init(void) {
-    Scene1Data *data = new Scene1Data;
+void* sceneA_init(void) {
+    sceneAData *data = new sceneAData;
     data->lensRadius = 1000;
     data->lensThickness = 10;
     data->lensCenter = v2(0, 0);
@@ -99,8 +99,8 @@ void* scene1_init(void) {
 };
 
 
-void scene1_draw(void *raw_data) {
-    Scene1Data *data = (Scene1Data*)raw_data;
+void sceneA_draw(void *raw_data) {
+    sceneAData *data = (sceneAData*)raw_data;
     
     int midX = GetScreenWidth() / 2;
     int midY = GetScreenHeight() / 2;
