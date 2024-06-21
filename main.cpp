@@ -124,7 +124,9 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
 
     // refraction happened, we need to bend the direction now.
     if (matNext != matCur) {
-      DrawCircle(pointNext.x, pointNext.y, 3, BLUE);
+      // change of medium.
+      DrawCircle(pointNext.x, pointNext.y, 3, {253, 255, 226, 128});
+
       Vector2 normalOut = Vector2Normalize(s.glassSDF->dirOutwardAt(pointNext));
       // normal inward.
       Vector2 normalIn = Vector2Normalize(Vector2Negate(normalOut)); 
@@ -154,7 +156,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
           if (fabs(sinOut) >= 1) {
             // total internal reflection.
             dir = Vector2Normalize(Vector2Add(dirRejNormalIn, Vector2Scale(dirProjNormalIn, -2)));
-            DrawCircle(pointNext.x, pointNext.y, 5, (Color) {244, 143, 177, 255});
+            DrawCircle(pointNext.x, pointNext.y, 5, (Color) {226, 187, 223, 255}); // total internal reflection color
           } else {
             // refraction..
             const float cosOut = sqrt(1 - sinOut * sinOut);
@@ -166,7 +168,7 @@ void raytrace(Scene s, Vector2 start, Vector2 dir) {
         }
       } // end (cosIn > 0)
     }
-    Color c = { 144, 244, 210, 255};
+    Color c = { 90, 114, 160, 255}; // light ray color
     c.a = 255 * (1.0f - ((float)(i + 1) / NSTEPS));
     DrawLineEx(pointCur, pointNext, 4, c);
     pointCur = pointNext;
@@ -185,7 +187,7 @@ void scene1_draw(Scene1Data *data) {
     int midY = GetScreenHeight() / 2;
 
     BeginDrawing();
-    ClearBackground(RAYWHITE);
+    ClearBackground({240, 240, 240, 255});
 
     const Vector2 lensCenter = v2(midX, midY);
     Scene s;
